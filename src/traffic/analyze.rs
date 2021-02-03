@@ -1,9 +1,9 @@
-use std::env;
-use std::io::{self, Write};
+
+
 use std::net::IpAddr;
 
-use pnet::datalink::{self, NetworkInterface};
-use pnet::datalink::Channel::Ethernet;
+use pnet::datalink::{NetworkInterface};
+
 use pnet::ipnetwork::IpNetwork;
 use pnet::packet::ethernet::{EthernetPacket, EtherTypes, MutableEthernetPacket};
 use pnet::packet::ip::{IpNextHeaderProtocol, IpNextHeaderProtocols};
