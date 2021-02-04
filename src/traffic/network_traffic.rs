@@ -51,7 +51,6 @@ impl NetworkTraffic {
     // 将收集的数据取出
     pub fn take(&mut self) -> Option<ProcessStatistics> {
         // let mut tmp = self.another_frames.lock().ok()?;
-        println!("新的一轮");
         let mut tmp = Vec::new();
         let elapse = self.start_time.elapsed().as_millis();
         {
@@ -69,7 +68,6 @@ impl NetworkTraffic {
             tmp.clone_from_slice(frames.as_slice());
             frames.clear();
             self.start_time = Instant::now();
-            println!("拿出的数据 {:?}", tmp.len());
         }
         // 将tmp中的数据集合一下
         let mut map = HashMap::<u32, ProcessPacketLength>::new();
@@ -83,7 +81,7 @@ impl NetworkTraffic {
                 Some(pid) => {
                     let pid = *pid;
                     if pid == 0 {
-                        println!("pid是0 {:?}", frame);
+                        // println!("pid是0 {:?}", frame);
                         continue;
                     }
                     let mut upload: usize = 0;
@@ -107,11 +105,11 @@ impl NetworkTraffic {
         let mut list = map.values().cloned().collect::<Vec<ProcessPacketLength>>();
         println!("list length: {:?} cap: {:?}", list.len(), list.capacity());
         list.shrink_to_fit();
-        println!("after list length: {:?} cap: {:?}", list.len(), list.capacity());
-        println!("before map: {:?}", map);
-        for item in &list {
-            println!("{:?}: download: {:?} upload: {:?}", item.pid, item.download_length, item.upload_length);
-        }
+        // println!("after list length: {:?} cap: {:?}", list.len(), list.capacity());
+        // println!("before map: {:?}", map);
+        // for item in &list {
+        //     println!("{:?}: download: {:?} upload: {:?}", item.pid, item.download_length, item.upload_length);
+        // }
         tmp.clear();
         let sta = ProcessStatistics {
             length: list.len(),
@@ -172,7 +170,7 @@ impl NetworkTraffic {
             let threads = datalink::interfaces()
                 .into_iter()
                 .filter(|item| item.is_up() && !item.ips.is_empty())
-                .filter(|item| item.name.eq("en0"))
+                // .filter(|item| item.name.eq("en0"))
                 .flat_map(|item| {
                     println!("interface {}, start", &item.name);
                     let tx = tx.clone();
