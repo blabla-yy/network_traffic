@@ -22,7 +22,6 @@ pub struct ProcessPacketLength {
 #[repr(C)]
 pub struct ProcessStatistics {
     pub length: usize,
-    // list: Vec<ProcessPacketLength>,
     pub list: *const ProcessPacketLength,
     // 本次收集的数据，使用的时间
     pub elapse_millisecond: u128,

@@ -17,4 +17,4 @@ typedef struct ProcessStatistics {
 
 void take(void (*f)(struct ProcessStatistics));
 
-void free_array(struct ProcessStatistics statistics);
+void free_array(struct ProcessStatistics stastistics);
