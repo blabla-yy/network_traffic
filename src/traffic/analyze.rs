@@ -58,7 +58,7 @@ fn is_upload(network_interface_ips: &[IpNetwork], source: IpAddr) -> bool {
     }
 }
 
-fn handle_ethernet_frame(interface: &NetworkInterface, ethernet: &EthernetPacket) -> Option<Frame> {
+pub fn handle_ethernet_frame(interface: &NetworkInterface, ethernet: &EthernetPacket) -> Option<Frame> {
     return match ethernet.get_ethertype() {
         EtherTypes::Ipv4 => {
             let header = Ipv4Packet::new(ethernet.payload()).unwrap();

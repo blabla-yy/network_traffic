@@ -10,8 +10,11 @@ use nix::unistd::Uid;
 use pnet::datalink;
 use pnet::datalink::Channel::Ethernet;
 use pnet::datalink::NetworkInterface;
+use pnet::packet::ethernet::EthernetPacket;
 
 use crate::traffic::analyze::{analyze_packet, Frame};
+
+use super::analyze::handle_ethernet_frame;
 
 pub struct NetworkTraffic {
     pub frames: Arc<Mutex<Vec<Frame>>>,
@@ -49,7 +52,7 @@ impl NetworkTraffic {
             another_frames: Arc::new(Mutex::new(Vec::new())),
             threads: Vec::new(),
             stop_signal: Arc::new(AtomicBool::new(false)),
-            only_en: true,
+            only_en: false,
         }
     }
 
@@ -155,7 +158,7 @@ impl NetworkTraffic {
         std::thread::spawn(move || {
             let threads = datalink::interfaces()
                 .into_iter()
-                .filter(|item| only_en && item.name.starts_with("en"))
+                .filter(|item| !only_en || item.name.starts_with("en"))
                 .filter(|item| item.is_up() && !item.ips.is_empty())
                 .flat_map(|item| {
                     println!("interface {}, start", &item.name);
@@ -193,7 +196,7 @@ impl NetworkTraffic {
         loop {
             match rx.next() {
                 Ok(packet) => {
-                    match analyze_packet(&interface, packet) {
+                    match handle_ethernet_frame(&interface, &EthernetPacket::new(packet).unwrap()) {
                         None => {}
                         Some(frame) => {
                             handle_frame(frame);

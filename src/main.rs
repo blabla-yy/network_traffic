@@ -41,11 +41,22 @@ fn main() {
         let mut total_download = 0;
         let mut total_upload = 0;
         for frame in frames {
-            println!("pid: {}, download: {} KB/s, upload: {} KB/s", frame.pid, frame.download_length, frame.upload_length);
+            // println!("pid: {}, download: {} KB/s, upload: {} KB/s", frame.pid, frame.download_length / 1024, frame.upload_length / 1024);
             total_upload = total_upload + frame.upload_length;
             total_download = total_download + frame.download_length;
         }
-        println!("total download: {} KB/s upload: {} KB/s", total_download, total_upload);
+        
+        let download_display = if total_download > 1024 {
+            format!("{} {}/s", total_download / 1024, "KB")
+        } else {
+            format!("{} {}/s", total_download, "B")
+        };
+        let upload_display = if total_upload > 1024 {
+            format!("{} {}/s", total_upload / 1024, "KB")
+        } else {
+            format!("{} {}/s", total_upload, "B")
+        };
+        println!("download: {}/s upload: {}/s", download_display , upload_display);
         println!("-------");
         std::thread::sleep(Duration::from_secs(1));
     }
