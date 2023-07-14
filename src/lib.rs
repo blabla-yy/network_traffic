@@ -17,7 +17,7 @@ pub extern fn take(f: extern fn(ProcessStatistics)) {
 
     loop {
         let start = time::Instant::now();
-        let mut list = traffic.take();
+        let list = traffic.take();
         let elapse = start.elapsed().as_secs();
         if list.is_empty() {
             f(ProcessStatistics {

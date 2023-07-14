@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Receiver;
 use std::thread::JoinHandle;
-use std::time::Instant;
+
 
 use nix::unistd::Uid;
 use pnet::datalink;
@@ -12,7 +12,7 @@ use pnet::datalink::Channel::Ethernet;
 use pnet::datalink::NetworkInterface;
 use pnet::packet::ethernet::EthernetPacket;
 
-use crate::traffic::analyze::{analyze_packet, Frame};
+use crate::traffic::analyze::{Frame};
 
 use super::analyze::handle_ethernet_frame;
 
