@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use netstat2::{AddressFamilyFlags, get_sockets_info, ProtocolFlags, ProtocolSocketInfo, SocketInfo};
-use netstat2::error::Error;
+use netstat2::{AddressFamilyFlags, get_sockets_info, ProtocolFlags, ProtocolSocketInfo};
+
 
 fn get_process_by_port(port: u16) -> Option<Vec<u32>> {
     let sockets_info = get_sockets_info(

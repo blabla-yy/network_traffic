@@ -1,9 +1,8 @@
 extern crate pnet;
 
 
+use std::time;
 use std::time::Duration;
-
-use nix::unistd::Uid;
 
 use crate::traffic::network_traffic::{NetworkTraffic, ProcessPacketLength, ProcessStatistics};
 
@@ -14,24 +13,27 @@ pub mod traffic;
 pub extern fn take(f: extern fn(ProcessStatistics)) {
     let mut traffic = NetworkTraffic::new();
 
-    println!("is root user: {}", Uid::effective().is_root());
-
     traffic.start_to_collect();
 
     loop {
-        match traffic.take() {
-            None => {
-                println!("none");
-                f(ProcessStatistics {
-                    length: 0,
-                    list: vec![].as_ptr(),
-                    elapse_millisecond: 0,
-                })
-            }
-            Some(item) => {
-                f(item)
-            }
-        };
+        let start = time::Instant::now();
+        let mut list = traffic.take();
+        let elapse = start.elapsed().as_secs();
+        if list.is_empty() {
+            f(ProcessStatistics {
+                length: 0,
+                list: vec![].as_ptr(),
+                elapse_millisecond: 0,
+            })
+        } else {
+            let item = ProcessStatistics {
+                length: list.len(),
+                list: list.as_ptr(),
+                elapse_millisecond: elapse,
+            };
+            std::mem::forget(list);
+            f(item)
+        }
         std::thread::sleep(Duration::from_secs(1));
     }
 }

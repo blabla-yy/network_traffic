@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr};
-
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Receiver;
 use std::thread::JoinHandle;
 use std::time::Instant;
 
+use nix::unistd::Uid;
 use pnet::datalink;
 use pnet::datalink::Channel::Ethernet;
 use pnet::datalink::NetworkInterface;
@@ -16,9 +16,11 @@ use crate::traffic::analyze::{analyze_packet, Frame};
 pub struct NetworkTraffic {
     pub frames: Arc<Mutex<Vec<Frame>>>,
     pub another_frames: Arc<Mutex<Vec<Frame>>>,
-    pub start_time: Instant,
     threads: Vec<JoinHandle<()>>,
     stop_signal: Arc<AtomicBool>,
+
+    // only Ethernet interfaces
+    only_en: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -39,22 +41,23 @@ pub struct ProcessStatistics {
 
 impl NetworkTraffic {
     pub fn new() -> Self {
+        if !Uid::effective().is_root() {
+            eprintln!("Not root user!");
+        }
         NetworkTraffic {
             frames: Arc::new(Mutex::new(Vec::new())),
             another_frames: Arc::new(Mutex::new(Vec::new())),
-            start_time: Instant::now(),
             threads: Vec::new(),
             stop_signal: Arc::new(AtomicBool::new(false)),
+            only_en: true,
         }
     }
 
-    // 将收集的数据取出
-    pub fn take(&mut self) -> Option<ProcessStatistics> {
-        // let mut tmp = self.another_frames.lock().ok()?;
+    pub fn take(&mut self) -> Vec<ProcessPacketLength> {
+// let mut tmp = self.another_frames.lock().ok()?;
         let mut tmp = Vec::new();
-        let elapse = self.start_time.elapsed().as_millis();
         {
-            let mut frames = self.frames.lock().ok()?;
+            let mut frames = self.frames.lock().ok().unwrap();
 
             tmp.resize(frames.len(), Frame {
                 interface_name: "".to_string(),
@@ -67,15 +70,11 @@ impl NetworkTraffic {
             });
             tmp.clone_from_slice(frames.as_slice());
             frames.clear();
-            self.start_time = Instant::now();
         }
         // 将tmp中的数据集合一下
         let mut map = HashMap::<u32, ProcessPacketLength>::new();
         let port_process = crate::traffic::sys_info::get_port_process_map(&tmp);
         for frame in tmp.iter() {
-            if frame.data_length > 1461622784 {
-                println!("大于1461622784: {:?}", frame);
-            }
             match port_process.get(&frame.local_port()) {
                 None => {}
                 Some(pid) => {
@@ -103,21 +102,9 @@ impl NetworkTraffic {
         }
 
         let mut list = map.values().cloned().collect::<Vec<ProcessPacketLength>>();
-        println!("list length: {:?} cap: {:?}", list.len(), list.capacity());
         list.shrink_to_fit();
-        // println!("after list length: {:?} cap: {:?}", list.len(), list.capacity());
-        // println!("before map: {:?}", map);
-        // for item in &list {
-        //     println!("{:?}: download: {:?} upload: {:?}", item.pid, item.download_length, item.upload_length);
-        // }
         tmp.clear();
-        let sta = ProcessStatistics {
-            length: list.len(),
-            list: list.as_ptr(),
-            elapse_millisecond: elapse as u64,
-        };
-        std::mem::forget(list);
-        Some(sta)
+        list
     }
 
     // 停止收集
@@ -132,7 +119,7 @@ impl NetworkTraffic {
             {
                 let signal = signal.load(Ordering::Acquire);
                 if signal {
-                    println!("结束:{}", signal);
+                    println!("结束: {}", signal);
                     return;
                 }
             }
@@ -160,17 +147,16 @@ impl NetworkTraffic {
     pub fn start_to_collect(&mut self) {
         self.stop();
         let (tx, rx) = std::sync::mpsc::channel();
-        // 在线，且有ip的网卡
-        // N个网卡，N个线程处理
         {
             self.stop_signal.swap(false, Ordering::Acquire);
         }
         let tx = tx.clone();
+        let only_en = self.only_en;
         std::thread::spawn(move || {
             let threads = datalink::interfaces()
                 .into_iter()
+                .filter(|item| only_en && item.name.starts_with("en"))
                 .filter(|item| item.is_up() && !item.ips.is_empty())
-                // .filter(|item| item.name.eq("en0"))
                 .flat_map(|item| {
                     println!("interface {}, start", &item.name);
                     let tx = tx.clone();
@@ -200,7 +186,7 @@ impl NetworkTraffic {
     fn get_packet(interface: NetworkInterface, handle_frame: &dyn Fn(Frame)) {
         let (_, mut rx) = match datalink::channel(&interface, Default::default()) {
             Ok(Ethernet(tx, rx)) => (tx, rx),
-            Ok(_) => panic!("packetdump: unhandled channel type: {}"),
+            Ok(_) => panic!("packetdump: unhandled channel type"),
             Err(e) => panic!("packetdump: unable to create channel: {}", e),
         };
 

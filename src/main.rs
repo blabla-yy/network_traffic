@@ -1,7 +1,6 @@
 extern crate pnet;
 
 
-
 use std::time::Duration;
 
 use crate::traffic::network_traffic::NetworkTraffic;
@@ -27,7 +26,6 @@ pub struct ProcessStatistics {
     pub elapse_millisecond: u128,
 }
 
-// 所有网卡信息
 // UP 在线设备
 // VIRTUAL 虚拟
 // LOOPBACK
@@ -39,7 +37,16 @@ fn main() {
 
     loop {
         let frames = traffic.take();
-        println!("{:?}", frames);
+
+        let mut total_download = 0;
+        let mut total_upload = 0;
+        for frame in frames {
+            println!("pid: {}, download: {} KB/s, upload: {} KB/s", frame.pid, frame.download_length, frame.upload_length);
+            total_upload = total_upload + frame.upload_length;
+            total_download = total_download + frame.download_length;
+        }
+        println!("total download: {} KB/s upload: {} KB/s", total_download, total_upload);
+        println!("-------");
         std::thread::sleep(Duration::from_secs(1));
     }
 }
