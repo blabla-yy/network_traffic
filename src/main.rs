@@ -28,13 +28,14 @@ pub struct ProcessStatistics {
 
 // UP 在线设备
 // VIRTUAL 虚拟
-// LOOPBACK
+// LOOPBACK 回环
 // PHYSICAL_ONLY 物理
 fn main() {
     let mut traffic = NetworkTraffic::new();
 
     traffic.start_to_collect();
 
+    let mut count = 0;
     loop {
         let frames = traffic.take();
 
@@ -45,19 +46,23 @@ fn main() {
             total_upload = total_upload + frame.upload_length;
             total_download = total_download + frame.download_length;
         }
-        
-        let download_display = if total_download > 1024 {
-            format!("{} {}/s", total_download / 1024, "KB")
-        } else {
-            format!("{} {}/s", total_download, "B")
-        };
-        let upload_display = if total_upload > 1024 {
-            format!("{} {}/s", total_upload / 1024, "KB")
-        } else {
-            format!("{} {}/s", total_upload, "B")
-        };
-        println!("download: {}/s upload: {}/s", download_display , upload_display);
-        println!("-------");
+        println!("download: {} upload: {}", format_speed(total_download), format_speed(total_upload));
         std::thread::sleep(Duration::from_secs(1));
+        count = count + 1;
+        if count > 5 {
+            traffic.stop();
+            break;
+        }
+    }
+    println!("stopped");
+}
+
+fn format_speed(size: usize) -> String {
+    if size > 1024 * 1024 {
+        format!("{} {}/s", size / (1024 * 1024), "MB")
+    } else if size > 1024 {
+        format!("{} {}/s", size / 1024, "KB")
+    } else {
+        format!("{} {}/s", size, "B")
     }
 }

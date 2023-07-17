@@ -2,26 +2,25 @@ use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr};
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::Receiver;
+use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread::JoinHandle;
-
 
 use nix::unistd::Uid;
 use pnet::datalink;
+use pnet::datalink::{DataLinkReceiver, DataLinkSender, NetworkInterface};
 use pnet::datalink::Channel::Ethernet;
-use pnet::datalink::NetworkInterface;
 use pnet::packet::ethernet::EthernetPacket;
 
-use crate::traffic::analyze::{Frame};
+use crate::traffic::analyze::Frame;
 
 use super::analyze::handle_ethernet_frame;
 
 pub struct NetworkTraffic {
     pub frames: Arc<Mutex<Vec<Frame>>>,
     pub another_frames: Arc<Mutex<Vec<Frame>>>,
-    threads: Vec<JoinHandle<()>>,
     stop_signal: Arc<AtomicBool>,
-
+    workers: Vec<(Sender<()>, Box<dyn DataLinkSender>, JoinHandle<()>)>,
+    receiver: Vec<(Sender<()>, JoinHandle<()>)>,
     // only Ethernet interfaces
     only_en: bool,
 }
@@ -50,9 +49,10 @@ impl NetworkTraffic {
         NetworkTraffic {
             frames: Arc::new(Mutex::new(Vec::new())),
             another_frames: Arc::new(Mutex::new(Vec::new())),
-            threads: Vec::new(),
-            stop_signal: Arc::new(AtomicBool::new(false)),
+            stop_signal: Arc::new(AtomicBool::new(true)),
             only_en: false,
+            workers: Vec::new(),
+            receiver: Vec::new(),
         }
     }
 
@@ -110,23 +110,61 @@ impl NetworkTraffic {
         list
     }
 
-    // 停止收集
+    // 停止收集，目前无法停止worker线程。主要是没有收到数据会阻塞在next函数，无法处理信号。
     pub fn stop(&mut self) {
-        println!("stop signal");
+        if self.workers.is_empty() && self.receiver.is_empty() {
+            return;
+        }
+        println!("send signal");
+        // let mut builder = |_: &mut [u8]| {
+        //     panic!("Should not be called");
+        // };
+        for (stop, package, handler) in &mut self.workers {
+            let _ = stop.send(());
+            // let mut buffer = vec![0; 20];
+            // buffer[1] = 34;
+            // buffer[18] = 76;
+            // let i = datalink::interfaces().into_iter().find(|item| {
+            //     let flag = item.name == handler.thread().name().unwrap_or("");
+            //     // if !flag {
+            //         // println!("{} {}", item.name, handler.thread().name().unwrap_or(""))
+            //     // }
+            //     return flag;
+            // });
+            // if i.is_none() {
+            //     print!("none");
+            // }
+            // let r = package.send_to(&buffer, i);
+            // // let r = package.build_and_send(0, 20, &mut builder);;
+            // if r.is_some() {
+            //     let r = r.unwrap();
+            //     if r.is_err() {
+            //         println!("send error: {}", r.err().unwrap());
+            //     }
+            // }
+        }
+        for (stop, _) in &mut self.receiver {
+            let _ = stop.send(());
+        }
+        println!("wait for thread");
+
+        // while let Some((_, _, handler)) = self.workers.pop() {
+        //     println!("shutdown {}", handler.thread().name().unwrap_or("unnamed"));
+        //     // let _ = handler.join();
+        // }
+        while let Some((_, handler)) = self.receiver.pop() {
+            println!("shutdown {}", handler.thread().name().unwrap_or("unnamed"));
+            let _ = handler.join();
+        }
         self.stop_signal.swap(true, Ordering::Acquire);
     }
 
     // 将Frame推入Vec
-    fn receive(signal: Arc<AtomicBool>, frames: Arc<Mutex<Vec<Frame>>>, rx: Receiver<Frame>) {
+    fn receive(frames: Arc<Mutex<Vec<Frame>>>, stop_rx: Receiver<()>, rx: Receiver<Frame>) {
         loop {
-            {
-                let signal = signal.load(Ordering::Acquire);
-                if signal {
-                    println!("结束: {}", signal);
-                    return;
-                }
-            }
-
+            if stop_rx.try_recv().is_ok() {
+                return;
+            };
             match rx.recv() {
                 Ok(item) => {
                     match frames.lock().ok() {
@@ -148,53 +186,77 @@ impl NetworkTraffic {
 
     // 多线程收集Frame
     pub fn start_to_collect(&mut self) {
+        if !self.stop_signal.load(Ordering::Acquire) {
+            println!("running");
+            return;
+        }
         self.stop();
         let (tx, rx) = std::sync::mpsc::channel();
         {
             self.stop_signal.swap(false, Ordering::Acquire);
         }
+
+        self.receiver = vec![{
+            let frames = Arc::clone(&self.frames);
+            let (stop_tx, stop_rx) = std::sync::mpsc::channel();
+            let thread = std::thread::Builder::new()
+                .name("receiver".to_owned())
+                .spawn(move || {
+                    NetworkTraffic::receive(frames, stop_rx, rx);
+                })
+                .unwrap();
+            (stop_tx, thread)
+        }];
+
+
         let tx = tx.clone();
         let only_en = self.only_en;
-        std::thread::spawn(move || {
-            let threads = datalink::interfaces()
-                .into_iter()
-                .filter(|item| !only_en || item.name.starts_with("en"))
-                .filter(|item| item.is_up() && !item.ips.is_empty())
-                .flat_map(|item| {
-                    println!("interface {}, start", &item.name);
-                    let tx = tx.clone();
-                    std::thread::Builder::new()
-                        .name("collector_".to_owned() + &item.name)
-                        .spawn(move || {
-                            NetworkTraffic::get_packet(item, &|frame: Frame| {
-                                tx.send(frame);
-                            });
-                        })
-                })
-                .collect::<Vec<JoinHandle<()>>>();
-            println!("threads length {}", threads.len());
-            for t in threads {
-                t.join();
-            }
-            println!("all collector threads done");
-        });
-
-        let signal = Arc::clone(&self.stop_signal);
-        let frames = Arc::clone(&self.frames);
-        std::thread::spawn(|| {
-            NetworkTraffic::receive(signal, frames, rx);
-        });
+        let threads = datalink::interfaces()
+            .into_iter()
+            .filter(|item| !only_en || item.name.starts_with("en"))
+            .filter(|item| item.is_up() && !item.ips.is_empty())
+            .filter_map(|item| {
+                let config = Default::default();
+                match datalink::channel(&item, config) {
+                    Ok(Ethernet(tx, rx)) => {
+                        Some((tx, rx, item))
+                    }
+                    Ok(_) => {
+                        eprintln!("packetdump: unhandled channel type");
+                        None
+                    }
+                    Err(e) => {
+                        eprintln!("packetdump: unable to create channel: {}", e);
+                        None
+                    }
+                }
+            })
+            .map(|(package_sender, package_receiver, item)| {
+                println!("interface {}, start", &item.name);
+                let tx = tx.clone();
+                let (stop_tx, stop_rx) = mpsc::channel();
+                let thread = std::thread::Builder::new()
+                    .name(item.name.clone())
+                    .spawn(move || {
+                        NetworkTraffic::get_packet(item, stop_rx, package_receiver, &|frame: Frame| {
+                            let send_result = tx.send(frame);
+                            if send_result.is_err() {
+                                eprintln!("send error {}", send_result.err().unwrap());
+                            }
+                        });
+                    });
+                (stop_tx, package_sender, thread.unwrap())
+            })
+            .collect::<Vec<(Sender<()>, Box<dyn DataLinkSender>, JoinHandle<()>)>>();
+        self.workers = threads;
     }
 
-    fn get_packet(interface: NetworkInterface, handle_frame: &dyn Fn(Frame)) {
-        let (_, mut rx) = match datalink::channel(&interface, Default::default()) {
-            Ok(Ethernet(tx, rx)) => (tx, rx),
-            Ok(_) => panic!("packetdump: unhandled channel type"),
-            Err(e) => panic!("packetdump: unable to create channel: {}", e),
-        };
-
+    fn get_packet(interface: NetworkInterface, stop_rx: Receiver<()>, mut package_rx: Box<dyn DataLinkReceiver>, handle_frame: &dyn Fn(Frame)) {
         loop {
-            match rx.next() {
+            if stop_rx.try_recv().is_ok() {
+                return;
+            };
+            match package_rx.next() {
                 Ok(packet) => {
                     match handle_ethernet_frame(&interface, &EthernetPacket::new(packet).unwrap()) {
                         None => {}
@@ -203,7 +265,9 @@ impl NetworkTraffic {
                         }
                     }
                 }
-                Err(_e) => return,
+                Err(e) => {
+                    eprintln!("receive package error {}", e);
+                }
             }
         }
     }

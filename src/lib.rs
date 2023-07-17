@@ -42,6 +42,5 @@ pub extern fn take(f: extern fn(ProcessStatistics)) {
 pub extern "C" fn free_array(statistics: ProcessStatistics) {
     drop(unsafe {
         let v = Vec::from_raw_parts(statistics.list as *mut ProcessPacketLength, statistics.length, statistics.length);
-        println!("drop {}, len {}", v.len(), statistics.length);
     });
 }
