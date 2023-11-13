@@ -138,7 +138,7 @@ impl NetworkTraffic {
             return;
         }
         println!("send stop signal");
-        for (stop, package, handler) in &mut self.workers {
+        for (stop, _package, _handler) in &mut self.workers {
             let _ = stop.send(());
         }
         for (stop, _) in &mut self.receiver {

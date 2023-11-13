@@ -7,19 +7,6 @@ pub enum ProtocolType {
     Udp,
 }
 
-impl ProtocolType {
-    pub fn filter(&self, protocol: IpNextHeaderProtocol) -> bool {
-        match self {
-            ProtocolType::Tcp => {
-                IpNextHeaderProtocols::Tcp == protocol
-            }
-            ProtocolType::Udp => {
-                IpNextHeaderProtocols::Udp == protocol
-            }
-        }
-    }
-}
-
 #[derive(Copy, Clone, Debug)]
 pub enum InterfaceType {
     Lo,

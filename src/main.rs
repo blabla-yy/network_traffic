@@ -51,6 +51,7 @@ fn main() {
     }
 }
 
+#[warn(dead_code)]
 fn format_speed(size: u64) -> String {
     if size > 1024 * 1024 {
         format!("{} {}/s", size / (1024 * 1024), "MB")
