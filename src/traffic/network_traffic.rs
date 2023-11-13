@@ -106,17 +106,8 @@ impl NetworkTraffic {
                     println!("unknown process");
                 }
                 Some(pid) => {
+                    // 可能为0
                     let pid = *pid;
-                    // if pid == 0 {
-                    //     println!("unknown process 0 length: {} port: {} ip: {},\
-                    //       target port: {} target ip: {} \
-                    //       protocol: {:?}",
-                    //              frame.data_length, frame.source_port, frame.source_ip,
-                    //              frame.destination_port, frame.destination_ip,
-                    //              frame.protocol);
-                        // println!("pid是0 {:?}", frame);
-                        // continue;
-                    // }
                     let mut upload: usize = 0;
                     let mut download: usize = 0;
                     if frame.is_upload {

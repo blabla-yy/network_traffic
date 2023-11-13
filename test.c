@@ -13,7 +13,7 @@ void data(ProcessStatistics item) {
         printf("pid: %d, download: %lu, upload: %lu\n", item.list[i].pid, item.list[i].download_length, item.list[i].upload_length);
         fflush(stdout);
     }
-    free_array(item);
+    free_data(item);
 //    free(item.list);
 }
 

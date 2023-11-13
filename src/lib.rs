@@ -14,6 +14,7 @@ pub extern fn take(f: extern fn(ProcessStatistics)) {
 
     traffic.start_to_collect();
 
+    // 这里循环主要是为了简化与C交互，否则需要处理NetworkTraffic实例。
     loop {
         let statistics = traffic.take();
         f(statistics);
@@ -22,6 +23,6 @@ pub extern fn take(f: extern fn(ProcessStatistics)) {
 }
 
 #[no_mangle]
-pub extern "C" fn free_array(statistics: ProcessStatistics) {
+pub extern "C" fn free_data(statistics: ProcessStatistics) {
     statistics.free();
 }
