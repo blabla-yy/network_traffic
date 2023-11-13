@@ -40,7 +40,18 @@ pub struct ProcessPacketLength {
 pub struct ProcessStatistics {
     pub length: usize,
     pub list: *const ProcessPacketLength,
-    pub elapse_millisecond: u64,
+
+    pub total_upload: u64,
+    pub total_download: u64,
+    // pub elapse_millisecond: u64,
+}
+
+impl ProcessStatistics {
+    pub fn free(self) {
+        drop(unsafe {
+            let v = Vec::from_raw_parts(self.list as *mut ProcessPacketLength, self.length, self.length);
+        });
+    }
 }
 
 impl NetworkTraffic {
@@ -60,7 +71,7 @@ impl NetworkTraffic {
     }
 
     // 从Vec中取数据
-    pub fn take(&mut self) -> Vec<ProcessPacketLength> {
+    pub fn take(&mut self) -> ProcessStatistics {
         let mut tmp = Vec::new();
         {
             let mut frames = self.frames.lock().ok().unwrap();
@@ -69,6 +80,7 @@ impl NetworkTraffic {
                 interface_name: "".to_string(),
                 data_length: 0,
                 is_upload: false,
+                protocol: ProtocolType::Tcp,
                 source_ip: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
                 source_port: 0,
                 destination_ip: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
@@ -80,15 +92,31 @@ impl NetworkTraffic {
         // 将tmp中的数据集合一下
         let mut map = HashMap::<u32, ProcessPacketLength>::new();
         let port_process = crate::traffic::sys_info::get_port_process_map(&tmp);
+
+        let mut total_upload: u64 = 0;
+        let mut total_download: u64 = 0;
         for frame in tmp.iter() {
-            match port_process.get(&frame.local_port()) {
-                None => {}
+            if frame.is_upload {
+                total_upload += frame.data_length as u64;
+            } else {
+                total_download += frame.data_length as u64;
+            }
+            match port_process.get(&frame.protocol_port()) {
+                None => {
+                    println!("unknown process");
+                }
                 Some(pid) => {
                     let pid = *pid;
-                    if pid == 0 {
+                    // if pid == 0 {
+                    //     println!("unknown process 0 length: {} port: {} ip: {},\
+                    //       target port: {} target ip: {} \
+                    //       protocol: {:?}",
+                    //              frame.data_length, frame.source_port, frame.source_ip,
+                    //              frame.destination_port, frame.destination_ip,
+                    //              frame.protocol);
                         // println!("pid是0 {:?}", frame);
-                        continue;
-                    }
+                        // continue;
+                    // }
                     let mut upload: usize = 0;
                     let mut download: usize = 0;
                     if frame.is_upload {
@@ -110,7 +138,18 @@ impl NetworkTraffic {
         let mut list = map.values().cloned().collect::<Vec<ProcessPacketLength>>();
         list.shrink_to_fit();
         tmp.clear();
-        list
+
+        let ptr = list.as_ptr();
+        let length = list.len();
+
+        std::mem::forget(list);
+        ProcessStatistics {
+            length,
+            list: ptr,
+            total_upload,
+            total_download,
+            // elapse_millisecond: 0,
+        }
     }
 
     // 停止收集，目前无法停止worker线程。主要是没有收到数据会阻塞在next函数，无法处理信号。

@@ -9,6 +9,8 @@ use pnet::packet::ipv6::Ipv6Packet;
 use pnet::packet::Packet;
 use pnet::packet::tcp::TcpPacket;
 use pnet::packet::udp::UdpPacket;
+use crate::traffic::config::ProtocolType;
+use crate::traffic::sys_info::ProtocolPort;
 
 #[derive(Debug, Clone)]
 pub struct Frame {
@@ -16,7 +18,7 @@ pub struct Frame {
     pub data_length: usize,
     pub is_upload: bool,
 
-
+    pub protocol: ProtocolType,
     pub source_ip: IpAddr,
     pub source_port: u16,
     pub destination_ip: IpAddr,
@@ -30,6 +32,10 @@ impl Frame {
             port = self.destination_port;
         }
         port
+    }
+
+    pub fn protocol_port(&self) -> ProtocolPort {
+        ProtocolPort::new(self.protocol, self.local_port())
     }
 }
 
@@ -67,18 +73,31 @@ pub fn handle_ethernet_frame(interface: &NetworkInterface, ethernet: &EthernetPa
     return match ethernet.get_ethertype() {
         EtherTypes::Ipv4 => {
             let header = Ipv4Packet::new(ethernet.payload()).unwrap();
-            let (source_port, destination_port) =
-                get_port(header.get_next_level_protocol(), header.payload())?;
+            let next_protocol = header.get_next_level_protocol();
+            let (source_port, destination_port) = get_port(next_protocol, header.payload())?;
             let source_ip = IpAddr::V4(header.get_source());
             let is_upload = is_upload(&interface.ips, source_ip);
             let by_mac = is_upload_by_macaddr(interface, ethernet);
             if is_upload != by_mac {
                 println!("not equals")
             }
+            let protocol = match next_protocol {
+                IpNextHeaderProtocols::Udp => {
+                    ProtocolType::Udp
+                }
+                IpNextHeaderProtocols::Tcp => {
+                    ProtocolType::Tcp
+                }
+                _ => {
+                    println!("neither tcp nor udp");
+                    return None;
+                }
+            };
             Some(Frame {
                 interface_name: interface.name.to_string(),
                 data_length: ethernet.packet().len(),
                 is_upload: is_upload,
+                protocol: protocol,
                 source_ip,
                 source_port,
                 destination_ip: IpAddr::V4(header.get_destination()),
@@ -87,8 +106,8 @@ pub fn handle_ethernet_frame(interface: &NetworkInterface, ethernet: &EthernetPa
         }
         EtherTypes::Ipv6 => {
             let header = Ipv6Packet::new(ethernet.payload()).unwrap();
-            let (source_port, destination_port) =
-                get_port(header.get_next_header(), header.payload())?;
+            let next_header = header.get_next_header();
+            let (source_port, destination_port) = get_port(next_header, header.payload())?;
             let source_ip = IpAddr::V6(header.get_source());
 
             let is_upload = is_upload(&interface.ips, source_ip);
@@ -97,10 +116,23 @@ pub fn handle_ethernet_frame(interface: &NetworkInterface, ethernet: &EthernetPa
                 println!("not equals")
             }
 
+            let protocol = match next_header {
+                IpNextHeaderProtocols::Udp => {
+                    ProtocolType::Udp
+                }
+                IpNextHeaderProtocols::Tcp => {
+                    ProtocolType::Tcp
+                }
+                _ => {
+                    println!("neither tcp nor udp");
+                    return None;
+                }
+            };
             Some(Frame {
                 interface_name: interface.name.to_string(),
                 data_length: ethernet.packet().len(),
                 is_upload: is_upload,
+                protocol: protocol,
                 source_ip,
                 source_port,
                 destination_ip: IpAddr::V6(header.get_destination()),
@@ -108,7 +140,6 @@ pub fn handle_ethernet_frame(interface: &NetworkInterface, ethernet: &EthernetPa
             })
         }
         _ => {
-            println!("unknown protocol");
             None
         }
     };

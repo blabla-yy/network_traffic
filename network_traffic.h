@@ -12,9 +12,10 @@ typedef struct ProcessPacketLength {
 typedef struct ProcessStatistics {
   uintptr_t length;
   const struct ProcessPacketLength *list;
-  uint64_t elapse_millisecond;
+  uint64_t total_upload;
+  uint64_t total_download;
 } ProcessStatistics;
 
 void take(void (*f)(struct ProcessStatistics));
 
-void free_array(struct ProcessStatistics stastistics);
+void free_array(struct ProcessStatistics statistics);

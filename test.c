@@ -6,19 +6,8 @@
 #include <stdio.h>
 #include <stdbool.h>
 
-bool IsInHeap(const void * pObj)
-{
-    int n;
-    if ( pObj < &n )
-    {
-        return true;
-    }
-    return false;
-}
-
 void data(ProcessStatistics item) {
-    printf("item in heap %d, list in heap %d\n", IsInHeap(&item), IsInHeap(item.list));
-    printf("length: %lu\n", item.length);
+    printf("total_upload: %llu total_download: %llu length: %lu\n", item.total_upload, item.total_download, item.length);
     fflush(stdout);
     for (int i = 0; i < item.length; i++) {
         printf("pid: %d, download: %lu, upload: %lu\n", item.list[i].pid, item.list[i].download_length, item.list[i].upload_length);

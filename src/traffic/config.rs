@@ -1,6 +1,7 @@
 use pnet::datalink::NetworkInterface;
 use pnet::packet::ip::{IpNextHeaderProtocol, IpNextHeaderProtocols};
 
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum ProtocolType {
     Tcp,
     Udp,
@@ -19,6 +20,7 @@ impl ProtocolType {
     }
 }
 
+#[derive(Copy, Clone, Debug)]
 pub enum InterfaceType {
     Lo,
     // 不支持

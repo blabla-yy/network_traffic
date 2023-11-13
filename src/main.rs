@@ -37,17 +37,10 @@ fn main() {
 
     let mut count = 0;
     loop {
-        let frames = traffic.take();
-
-        let mut total_download = 0;
-        let mut total_upload = 0;
-        for frame in frames {
-            // println!("pid: {}, download: {} KB/s, upload: {} KB/s", frame.pid, frame.download_length / 1024, frame.upload_length / 1024);
-            total_upload = total_upload + frame.upload_length;
-            total_download = total_download + frame.download_length;
-        }
-        println!("download: {} upload: {}", format_speed(total_download), format_speed(total_upload));
+        let statistics = traffic.take();
+        println!("download: {} upload: {}", format_speed(statistics.total_download), format_speed(statistics.total_upload));
         std::thread::sleep(Duration::from_secs(1));
+        statistics.free();
         count = count + 1;
         if count > 5 {
             traffic.stop();
@@ -57,7 +50,7 @@ fn main() {
     println!("stopped");
 }
 
-fn format_speed(size: usize) -> String {
+fn format_speed(size: u64) -> String {
     if size > 1024 * 1024 {
         format!("{} {}/s", size / (1024 * 1024), "MB")
     } else if size > 1024 {
