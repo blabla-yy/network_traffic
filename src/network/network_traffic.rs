@@ -10,9 +10,10 @@ use pnet::datalink;
 use pnet::datalink::{DataLinkReceiver, DataLinkSender, NetworkInterface};
 use pnet::datalink::Channel::Ethernet;
 use pnet::packet::ethernet::EthernetPacket;
+use serde::{Deserialize, Serialize};
 
-use crate::traffic::analyze::Frame;
-use crate::traffic::config::{InterfaceType, ProtocolType};
+use crate::network::analyze::Frame;
+use crate::network::config::{InterfaceType, ProtocolType};
 
 use super::analyze::handle_ethernet_frame;
 
@@ -29,6 +30,7 @@ pub struct NetworkTraffic {
 
 #[derive(Debug, Clone)]
 #[repr(C)]
+#[derive(Serialize, Deserialize)]
 pub struct ProcessPacketLength {
     pub pid: u32,
     pub upload_length: usize,
@@ -37,21 +39,14 @@ pub struct ProcessPacketLength {
 
 #[derive(Debug)]
 #[repr(C)]
+#[derive(Serialize, Deserialize)]
 pub struct ProcessStatistics {
-    pub length: usize,
-    pub list: *const ProcessPacketLength,
+    // pub list_ptr: *const ProcessPacketLength,
+    pub list: Vec<ProcessPacketLength>,
 
     pub total_upload: u64,
     pub total_download: u64,
     // pub elapse_millisecond: u64,
-}
-
-impl ProcessStatistics {
-    pub fn free(self) {
-        drop(unsafe {
-            let v = Vec::from_raw_parts(self.list as *mut ProcessPacketLength, self.length, self.length);
-        });
-    }
 }
 
 impl NetworkTraffic {
@@ -91,7 +86,7 @@ impl NetworkTraffic {
         }
         // 将tmp中的数据集合一下
         let mut map = HashMap::<u32, ProcessPacketLength>::new();
-        let port_process = crate::traffic::sys_info::get_port_process_map(&tmp);
+        let port_process = crate::network::sys_info::get_port_process_map(&tmp);
 
         let mut total_upload: u64 = 0;
         let mut total_download: u64 = 0;
@@ -130,16 +125,10 @@ impl NetworkTraffic {
         list.shrink_to_fit();
         tmp.clear();
 
-        let ptr = list.as_ptr();
-        let length = list.len();
-
-        std::mem::forget(list);
         ProcessStatistics {
-            length,
-            list: ptr,
+            list,
             total_upload,
             total_download,
-            // elapse_millisecond: 0,
         }
     }
 

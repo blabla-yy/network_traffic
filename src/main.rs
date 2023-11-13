@@ -3,9 +3,9 @@ extern crate pnet;
 
 use std::time::Duration;
 
-use crate::traffic::network_traffic::NetworkTraffic;
+use crate::network::network_traffic::NetworkTraffic;
 
-mod traffic;
+mod network;
 
 
 #[derive(Debug, Clone)]
@@ -38,16 +38,17 @@ fn main() {
     let mut count = 0;
     loop {
         let statistics = traffic.take();
-        println!("download: {} upload: {}", format_speed(statistics.total_download), format_speed(statistics.total_upload));
-        std::thread::sleep(Duration::from_secs(1));
-        statistics.free();
-        count = count + 1;
-        if count > 5 {
-            traffic.stop();
-            break;
+        match serde_json::to_string(&statistics) {
+            Ok(json) => {
+                println!("{}", json);
+            }
+            Err(err) => {
+                eprintln!("serialize json error {}", err);
+            }
         }
+        std::thread::sleep(Duration::from_secs(1));
+        count = count + 1;
     }
-    println!("stopped");
 }
 
 fn format_speed(size: u64) -> String {

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use netstat2::{AddressFamilyFlags, get_sockets_info, ProtocolFlags, ProtocolSocketInfo};
 
-use crate::traffic::config::ProtocolType;
+use crate::network::config::ProtocolType;
 
 fn get_process_by_port(port: u16) -> Option<Vec<u32>> {
     let sockets_info = get_sockets_info(
@@ -42,7 +42,7 @@ impl ProtocolPort {
     }
 }
 
-pub fn get_port_process_map(frames: &Vec<crate::traffic::analyze::Frame>) -> HashMap<ProtocolPort, u32> {
+pub fn get_port_process_map(frames: &Vec<crate::network::analyze::Frame>) -> HashMap<ProtocolPort, u32> {
     let mut map: HashMap<ProtocolPort, u32> = HashMap::new();
     for item in frames {
         map.insert(ProtocolPort::new(item.protocol, item.local_port()), 0);

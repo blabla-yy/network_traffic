@@ -9,8 +9,8 @@ use pnet::packet::ipv6::Ipv6Packet;
 use pnet::packet::Packet;
 use pnet::packet::tcp::TcpPacket;
 use pnet::packet::udp::UdpPacket;
-use crate::traffic::config::ProtocolType;
-use crate::traffic::sys_info::ProtocolPort;
+use crate::network::config::ProtocolType;
+use crate::network::sys_info::ProtocolPort;
 
 #[derive(Debug, Clone)]
 pub struct Frame {
