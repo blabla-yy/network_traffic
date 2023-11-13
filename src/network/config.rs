@@ -1,5 +1,5 @@
 use pnet::datalink::NetworkInterface;
-use pnet::packet::ip::{IpNextHeaderProtocol, IpNextHeaderProtocols};
+
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum ProtocolType {
@@ -7,6 +7,7 @@ pub enum ProtocolType {
     Udp,
 }
 
+#[warn(dead_code)]
 #[derive(Copy, Clone, Debug)]
 pub enum InterfaceType {
     Lo,
