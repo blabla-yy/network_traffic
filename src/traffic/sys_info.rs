@@ -26,7 +26,7 @@ fn get_process_by_port(port: u16) -> Option<Vec<u32>> {
     None
 }
 
-pub fn get_port_process_map(frames: &Vec<crate::traffic::analyze::Frame>) -> HashMap<u16, u32> {
+pub fn  get_port_process_map(frames: &Vec<crate::traffic::analyze::Frame>) -> HashMap<u16, u32> {
     let mut map: HashMap<u16, u32> = HashMap::new();
     for item in frames {
         map.insert(item.local_port(), 0);

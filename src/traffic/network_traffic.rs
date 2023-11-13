@@ -12,6 +12,7 @@ use pnet::datalink::Channel::Ethernet;
 use pnet::packet::ethernet::EthernetPacket;
 
 use crate::traffic::analyze::Frame;
+use crate::traffic::config::{InterfaceType, ProtocolType};
 
 use super::analyze::handle_ethernet_frame;
 
@@ -21,8 +22,9 @@ pub struct NetworkTraffic {
     stop_signal: Arc<AtomicBool>,
     workers: Vec<(Sender<()>, Box<dyn DataLinkSender>, JoinHandle<()>)>,
     receiver: Vec<(Sender<()>, JoinHandle<()>)>,
-    // only Ethernet interfaces
-    only_en: bool,
+
+    interface_types: Vec<InterfaceType>,
+    // protocol_types: Vec<ProtocolType>
 }
 
 #[derive(Debug, Clone)]
@@ -50,14 +52,15 @@ impl NetworkTraffic {
             frames: Arc::new(Mutex::new(Vec::new())),
             another_frames: Arc::new(Mutex::new(Vec::new())),
             stop_signal: Arc::new(AtomicBool::new(true)),
-            only_en: false,
             workers: Vec::new(),
             receiver: Vec::new(),
+            interface_types: vec![InterfaceType::En],
+            // protocol_types: vec![ProtocolType::Tcp, ProtocolType::Udp],
         }
     }
 
+    // 从Vec中取数据
     pub fn take(&mut self) -> Vec<ProcessPacketLength> {
-// let mut tmp = self.another_frames.lock().ok()?;
         let mut tmp = Vec::new();
         {
             let mut frames = self.frames.lock().ok().unwrap();
@@ -115,45 +118,16 @@ impl NetworkTraffic {
         if self.workers.is_empty() && self.receiver.is_empty() {
             return;
         }
-        println!("send signal");
-        // let mut builder = |_: &mut [u8]| {
-        //     panic!("Should not be called");
-        // };
+        println!("send stop signal");
         for (stop, package, handler) in &mut self.workers {
             let _ = stop.send(());
-            // let mut buffer = vec![0; 20];
-            // buffer[1] = 34;
-            // buffer[18] = 76;
-            // let i = datalink::interfaces().into_iter().find(|item| {
-            //     let flag = item.name == handler.thread().name().unwrap_or("");
-            //     // if !flag {
-            //         // println!("{} {}", item.name, handler.thread().name().unwrap_or(""))
-            //     // }
-            //     return flag;
-            // });
-            // if i.is_none() {
-            //     print!("none");
-            // }
-            // let r = package.send_to(&buffer, i);
-            // // let r = package.build_and_send(0, 20, &mut builder);;
-            // if r.is_some() {
-            //     let r = r.unwrap();
-            //     if r.is_err() {
-            //         println!("send error: {}", r.err().unwrap());
-            //     }
-            // }
         }
         for (stop, _) in &mut self.receiver {
             let _ = stop.send(());
         }
-        println!("wait for thread");
 
-        // while let Some((_, _, handler)) = self.workers.pop() {
-        //     println!("shutdown {}", handler.thread().name().unwrap_or("unnamed"));
-        //     // let _ = handler.join();
-        // }
         while let Some((_, handler)) = self.receiver.pop() {
-            println!("shutdown {}", handler.thread().name().unwrap_or("unnamed"));
+            println!("shutdown {}", handler.thread().name().unwrap_or("unnamed thread"));
             let _ = handler.join();
         }
         self.stop_signal.swap(true, Ordering::Acquire);
@@ -210,10 +184,11 @@ impl NetworkTraffic {
 
 
         let tx = tx.clone();
-        let only_en = self.only_en;
         let threads = datalink::interfaces()
             .into_iter()
-            .filter(|item| !only_en || item.name.starts_with("en"))
+            .filter(|item| {
+                self.interface_types.iter().any(|interface_type| interface_type.filter(item))
+            })
             .filter(|item| item.is_up() && !item.ips.is_empty())
             .filter_map(|item| {
                 let config = Default::default();
@@ -238,12 +213,7 @@ impl NetworkTraffic {
                 let thread = std::thread::Builder::new()
                     .name(item.name.clone())
                     .spawn(move || {
-                        NetworkTraffic::get_packet(item, stop_rx, package_receiver, &|frame: Frame| {
-                            let send_result = tx.send(frame);
-                            if send_result.is_err() {
-                                eprintln!("send error {}", send_result.err().unwrap());
-                            }
-                        });
+                        NetworkTraffic::get_packet(item, stop_rx, package_receiver, tx);
                     });
                 (stop_tx, package_sender, thread.unwrap())
             })
@@ -251,7 +221,9 @@ impl NetworkTraffic {
         self.workers = threads;
     }
 
-    fn get_packet(interface: NetworkInterface, stop_rx: Receiver<()>, mut package_rx: Box<dyn DataLinkReceiver>, handle_frame: &dyn Fn(Frame)) {
+    fn get_packet(interface: NetworkInterface, stop_rx: Receiver<()>,
+                  mut package_rx: Box<dyn DataLinkReceiver>,
+                  frame_sender: Sender<Frame>) {
         loop {
             if stop_rx.try_recv().is_ok() {
                 return;
@@ -261,7 +233,10 @@ impl NetworkTraffic {
                     match handle_ethernet_frame(&interface, &EthernetPacket::new(packet).unwrap()) {
                         None => {}
                         Some(frame) => {
-                            handle_frame(frame);
+                            let send_result = frame_sender.send(frame);
+                            if send_result.is_err() {
+                                eprintln!("send error {}", send_result.err().unwrap());
+                            }
                         }
                     }
                 }
