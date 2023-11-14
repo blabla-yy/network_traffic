@@ -38,7 +38,6 @@ pub struct ProcessPacketLength {
 }
 
 #[derive(Debug)]
-#[repr(C)]
 #[derive(Serialize, Deserialize)]
 pub struct ProcessStatistics {
     // pub list_ptr: *const ProcessPacketLength,

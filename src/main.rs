@@ -7,25 +7,6 @@ use crate::network::network_traffic::NetworkTraffic;
 
 mod network;
 
-
-#[derive(Debug, Clone)]
-#[repr(C)]
-pub struct ProcessPacketLength {
-    // 递归至非1的父进程ID
-    pub pid: u32,
-    pub upload_length: usize,
-    pub download_length: usize,
-}
-
-#[derive(Debug)]
-#[repr(C)]
-pub struct ProcessStatistics {
-    pub length: usize,
-    pub list: *const ProcessPacketLength,
-    // 本次收集的数据，使用的时间
-    pub elapse_millisecond: u128,
-}
-
 // UP 在线设备
 // VIRTUAL 虚拟
 // LOOPBACK 回环

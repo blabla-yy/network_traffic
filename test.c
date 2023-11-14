@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 
-void data(ProcessStatistics item) {
+void data(ProcessStatisticsFFI item) {
     printf("total_upload: %llu total_download: %llu length: %lu\n", item.total_upload, item.total_download, item.length);
     fflush(stdout);
     for (int i = 0; i < item.length; i++) {
