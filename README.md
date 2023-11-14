@@ -3,6 +3,6 @@
 为Mac小应用[网络监控](https://github.com/blabla-yy/monitor)提供支持。学习为主，有疑问可以讨论。
 
 ## Target
-目前有两个target
+目前有两个target，均需要root权限才可以获取到数据
 - bin： 作为rust调试用
 - staticlib：编译成静态库，兼容C ABI支持Swift项目调用
